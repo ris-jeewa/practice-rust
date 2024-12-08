@@ -1386,6 +1386,7 @@ dependencies = [
  "axum",
  "chrono",
  "dotenv",
+ "lazy_static",
  "sea-orm",
  "serde",
  "tokio",
