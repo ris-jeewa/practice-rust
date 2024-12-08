@@ -6,3 +6,8 @@ edition = "2021"
 [dependencies]
 sea-orm = { version = "1.1.0", features = [ "sqlx-postgres", "runtime-tokio-rustls", "macros" ] }
 tokio = { version = "1.42.0", features = ["full"] }
+axum = "0.7.9"
+serde = "1.0.215"
+chrono = "0.4.38"
+tower-http = {version="0.6.2",features=["cors"]}
+dotenv = "0.15.0"

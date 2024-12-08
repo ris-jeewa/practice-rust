@@ -25,13 +25,11 @@ impl MigrationTrait for Migration {
                         ColumnDef::new(Product::CreatedAt)
                             .date_time()
                             .not_null()
-                            .default(Expr::current_timestamp()),
                     )
                     .col(
                         ColumnDef::new(Product::UpdatedAt)
                             .date_time()
                             .not_null()
-                            .default(Expr::current_timestamp()),
                     )
                     .to_owned(),
             )
