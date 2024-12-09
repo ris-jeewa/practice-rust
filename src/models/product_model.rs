@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use chrono::NaiveDateTime;
 
-use super::item_model::{GetItemModel, ItemModel};
+use super::item_model::ItemModel;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ProductModel{

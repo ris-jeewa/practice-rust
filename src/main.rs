@@ -1,9 +1,6 @@
-use axum::extract::Path;
-use axum::{Extension, Json};
-use axum::{http::StatusCode, response::IntoResponse, Router};
-use entities::item;
-use models::item_model::ItemModel;
-use sea_orm::{ActiveModelTrait, Database, DatabaseConnection,EntityTrait,  Set, };
+use axum::Extension;
+use axum:: Router;
+use sea_orm::Database;
 
 mod entities;
 mod models;
@@ -30,53 +27,3 @@ async fn server() {
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     axum::serve(listener, router).await.unwrap();
 }
-
-
-
-// async fn get_product_by_id(
-//     Path(product_id): Path<i32>,
-// ) -> impl IntoResponse {
-//     let db: DatabaseConnection =
-//         Database::connect("postgresql://postgres:root@localhost:5432/products_db")
-//             .await
-//             .unwrap();
-
-//         let product_data = product::Entity::find_by_id(product_id)
-//             .find_with_related(item::Entity)
-//             .all(&db)
-//             .await;
-
-//             if product_data() {
-//                 return (StatusCode::NOT_FOUND, Json("Product not found")).into_response();
-//             }
-        
-//             let result: Vec<ProductItemModel> = product_data
-//                 .into_iter()
-//                 .map(|(product, items)| ProductItemModel {
-//                     id: product.id,
-//                     name:product.name,
-//                     description: product.description,
-//                     items: items
-//                         .into_iter()
-//                         .map(|item| ItemModel {
-//                             id: item.id,
-//                             product_id:item.product_id,
-//                             color: item.color,
-//                             size: item.size,
-//                             stock: item.stock,
-//                         })
-//                         .collect(),
-//                 })
-//                 .collect();
-        
-//             (StatusCode::OK, Json(result)).into_response()
-// }
-
-
-
-
-
-
-
-
-
