@@ -5,7 +5,6 @@ use tracing::{info, instrument,error};
 
 use crate::{entities::{item, product}, models::{item_model::ItemModel, product_model::{CreateProductModal, ProductItemModel, UpdateProductModal}}};
 
-
 #[instrument(skip(db))]
 pub async fn get_all_products(
     Extension(db): Extension<DatabaseConnection>,
@@ -32,17 +31,12 @@ pub async fn get_all_products(
                         color: item.color.unwrap_or_default(), 
                         size: item.size.unwrap_or_default(),  
                         stock: item.stock,
-
                     })
                     .collect()
                 })
                 .collect();
 
             info!("Successfully fetched {} products", response.len());
-
-            if let Err(e) = db.close().await {
-                error!("Error closing the database connection: {:?}", e);
-            }
 
             (StatusCode::OK, Json(response))
         }
@@ -152,7 +146,6 @@ pub async fn update_product(
     }
 }
 
-
 #[instrument(skip(db))]
 pub async fn delete_product(
     Extension(db): Extension<DatabaseConnection>,
@@ -160,62 +153,49 @@ pub async fn delete_product(
 ) -> impl IntoResponse {
     info!("Deleting product with ID: {}", product_id);
 
-    match product::Entity::find_by_id(product_id).one(&db).await {
-        Ok(Some(_)) => {
-            match db.begin().await {
-                Ok(txn) => {
-                    // Delete associated items
-                    if let Err(err) = item::Entity::delete_many()
-                        .filter(item::Column::ProductId.eq(product_id))
-                        .exec(&txn)
-                        .await
-                    {
-                        error!("Failed to delete associated items for product ID {}: {:?}", product_id, err);
-                        txn.rollback().await.unwrap_or_else(|rollback_err| {
-                            error!("Failed to rollback transaction: {:?}", rollback_err);
-                        });
-                        return (StatusCode::INTERNAL_SERVER_ERROR, Json("Failed to delete associated items")).into_response();
-                    }
-
+    match db.begin().await {
+        Ok(txn) => {
+            // Delete associated items
+            match item::Entity::delete_many()
+                .filter(item::Column::ProductId.eq(product_id))
+                .exec(&txn)
+                .await
+            {
+                Ok(_) => {
                     // Delete the product
-                    if let Err(err) = product::Entity::delete_by_id(product_id).exec(&txn).await {
-                        error!("Failed to delete product ID {}: {:?}", product_id, err);
-                        txn.rollback().await.unwrap_or_else(|rollback_err| {
-                            error!("Failed to rollback transaction: {:?}", rollback_err);
-                        });
-                        return (StatusCode::INTERNAL_SERVER_ERROR, Json("Failed to delete product")).into_response();
+                    match product::Entity::delete_by_id(product_id).exec(&txn).await {
+                        Ok(delete_result) => {
+                            if delete_result.rows_affected > 0 {
+                                if txn.commit().await.is_ok() {
+                                    info!("Product with ID {} and associated items successfully deleted", product_id);
+                                    (StatusCode::OK, Json("Product and associated items deleted")).into_response()
+                                } else {
+                                    error!("Failed to commit transaction for product ID {}", product_id);
+                                    (StatusCode::INTERNAL_SERVER_ERROR, Json("Failed to commit transaction")).into_response()
+                                }
+                            } else {
+                                txn.rollback().await.ok();
+                                info!("Product with ID {} not found", product_id);
+                                (StatusCode::NOT_FOUND, Json("Product not found")).into_response()
+                            }
+                        }
+                        Err(err) => {
+                            txn.rollback().await.ok();
+                            error!("Failed to delete product ID {}: {:?}", product_id, err);
+                            (StatusCode::INTERNAL_SERVER_ERROR, Json("Failed to delete product")).into_response()
+                        }
                     }
-
-                    if let Err(err) = txn.commit().await {
-                        error!("Failed to commit transaction for deleting product ID {}: {:?}", product_id, err);
-                        return (StatusCode::INTERNAL_SERVER_ERROR, Json("Failed to commit transaction")).into_response();
-                    }
-
-                    info!("Product with ID {} and associated items successfully deleted", product_id);
-                    if let Err(err) = db.close().await {
-                        error!("Failed to close database connection: {:?}", err);
-                    }
-                    (StatusCode::OK, Json("Product and associated items deleted")).into_response()
                 }
                 Err(err) => {
-                    error!("Failed to start transaction for product ID {}: {:?}", product_id, err);
-                    (StatusCode::INTERNAL_SERVER_ERROR, Json("Failed to start transaction")).into_response()
+                    txn.rollback().await.ok();
+                    error!("Failed to delete associated items for product ID {}: {:?}", product_id, err);
+                    (StatusCode::INTERNAL_SERVER_ERROR, Json("Failed to delete associated items")).into_response()
                 }
             }
         }
-        Ok(None) => {
-            info!("Product with ID {} not found", product_id);
-            if let Err(err) = db.close().await {
-                error!("Failed to close database connection: {:?}", err);
-            }
-            (StatusCode::NOT_FOUND, Json("Product not found")).into_response()
-        }
         Err(err) => {
-            error!("Failed to check existence of product ID {}: {:?}", product_id, err);
-            if let Err(err) = db.close().await {
-                error!("Failed to close database connection: {:?}", err);
-            }
-            (StatusCode::INTERNAL_SERVER_ERROR, Json("Failed to check product existence")).into_response()
+            error!("Failed to start transaction for product ID {}: {:?}", product_id, err);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json("Failed to start transaction")).into_response()
         }
     }
 }
