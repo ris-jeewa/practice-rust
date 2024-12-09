@@ -1,61 +1,67 @@
 use axum::{extract::Path, http::StatusCode, response::IntoResponse, Extension, Json};
 use chrono::{NaiveDateTime, Utc};
-use sea_orm::{ActiveModelTrait, ActiveValue::NotSet, ColumnTrait, Database, DatabaseConnection, EntityTrait, QueryFilter, Set, TransactionTrait};
+use sea_orm::{ActiveModelTrait, ActiveValue::NotSet, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set, TransactionTrait};
+use tracing::{info, instrument,error};
 
 use crate::{entities::{item, product}, models::{item_model::ItemModel, product_model::{CreateProductModal, ProductItemModel, UpdateProductModal}}};
 
 
-
+#[instrument(skip(db))]
 pub async fn get_all_products(
     Extension(db): Extension<DatabaseConnection>,
 ) -> impl IntoResponse {
-    // let db: DatabaseConnection =
-    //     Database::connect("postgresql://postgres:root@localhost:5432/products_db")
-    //         .await
-    //         .unwrap();
+    info!("Fetching all products with related items");
 
-    // Fetch all products with related items
-    let products_with_items = product::Entity::find()
+    match product::Entity::find()
         .find_with_related(item::Entity)
         .all(&db)
         .await
-        .unwrap();
-
-    // Transform the result into a custom response format
-    let response: Vec<ProductItemModel> = products_with_items
-        .into_iter()
-        .map(|(product, items)| ProductItemModel {
-            id: product.id,
-            name:product.name,
-            description: product.description,
-            items: items
+    {
+        Ok(products_with_items) => {
+            let response: Vec<ProductItemModel> = products_with_items
                 .into_iter()
-                .map(|item| ItemModel {
-                    id: item.id,
-                    product_id:item.product_id,
-                    color: item.color,
-                    size: item.size,
-                    stock: item.stock,
+                .map(|(product, items)| ProductItemModel {
+                    id: product.id,
+                    name: product.name,
+                    description: product.description,
+                    items: items
+                    .into_iter()
+                    .map(|item| ItemModel {
+                        id: Some(item.id),
+                        product_id: item.product_id,
+                        color: item.color.unwrap_or_default(), 
+                        size: item.size.unwrap_or_default(),  
+                        stock: item.stock,
+
+                    })
+                    .collect()
                 })
-                .collect(),
-        })
-        .collect();
+                .collect();
 
-    db.close().await.unwrap();
+            info!("Successfully fetched {} products", response.len());
 
-    (StatusCode::OK, axum::Json(response))
+            if let Err(e) = db.close().await {
+                error!("Error closing the database connection: {:?}", e);
+            }
+
+            (StatusCode::OK, Json(response))
+        }
+        Err(err) => {
+            error!("Failed to fetch products: {:?}", err);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(vec![]),
+            )
+        }
+    }
 }
 
-
+#[instrument(skip(db, product_data))]
 pub async fn create_product(
     Extension(db): Extension<DatabaseConnection>,
-
     Json(product_data): Json<CreateProductModal>,
 ) -> impl IntoResponse {
-    // let db: DatabaseConnection =
-    //     Database::connect("postgresql://postgres:root@localhost:5432/products_db")
-    //         .await
-    //         .unwrap();
+    info!("Creating a new product");
 
     let now: NaiveDateTime = Utc::now().naive_utc();
 
@@ -67,86 +73,149 @@ pub async fn create_product(
         ..Default::default()
     };
 
-    let _result = product_model.insert(&db).await.unwrap();
-
-    (StatusCode::CREATED, "Product created")
+    match product_model.insert(&db).await {
+        Ok(_result) => {
+            info!("Product successfully created");
+            (StatusCode::CREATED, "Product created")
+        }
+        Err(err) => {
+            error!("Failed to create product: {:?}", err);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to create product",
+            )
+        }
+    }
 }
 
+
+
+#[instrument(skip(db, product_data))]
 pub async fn update_product(
     Extension(db): Extension<DatabaseConnection>,
     Path(product_id): Path<i32>,
     Json(product_data): Json<UpdateProductModal>,
 ) -> impl IntoResponse {
-    // let db: DatabaseConnection =
-    //     Database::connect("postgresql://postgres:root@localhost:5432/products_db")
-    //         .await
-    //         .unwrap();
+    info!("Updating product with ID: {}", product_id);
 
     let now: NaiveDateTime = Utc::now().naive_utc();
 
-    let mut updated_product:product::ActiveModel = product::Entity::find()
+    // Fetch the product to update
+    let product_result = product::Entity::find()
         .filter(product::Column::Id.eq(product_id))
         .one(&db)
-        .await
-        .unwrap()
-        .unwrap().into();
-        
-        updated_product.name = match product_data.name {
-            Some(name) => Set(name),
-            None => NotSet,
-        };    
-    
-    updated_product.description=Set(product_data.description);
-    updated_product.updated_at = Set(now);
+        .await;
 
-    updated_product.update(&db).await.unwrap();
+    match product_result {
+        Ok(Some(existing_product)) => {
+            let mut updated_product: product::ActiveModel = existing_product.into();
 
-    db.close().await.unwrap();
-    
-    (StatusCode::ACCEPTED,"Product updated")
+            updated_product.name = match product_data.name {
+                Some(name) => Set(name),
+                None => NotSet,
+            };
+
+            updated_product.description = Set(product_data.description);
+            updated_product.updated_at = Set(now);
+
+            match updated_product.update(&db).await {
+                Ok(_) => {
+                    info!("Product with ID {} updated successfully", product_id);
+                    if let Err(e) = db.close().await {
+                        error!("Failed to close the database connection: {:?}", e);
+                    }
+                    (StatusCode::ACCEPTED, "Product updated")
+                }
+                Err(err) => {
+                    error!("Failed to update product with ID {}: {:?}", product_id, err);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Failed to update product",
+                    )
+                }
+            }
+        }
+        Ok(None) => {
+            error!("Product with ID {} not found", product_id);
+            (
+                StatusCode::NOT_FOUND,
+                "Product not found",
+            )
+        }
+        Err(err) => {
+            error!("Failed to fetch product with ID {}: {:?}", product_id, err);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to fetch product",
+            )
+        }
+    }
 }
 
 
+#[instrument(skip(db))]
 pub async fn delete_product(
     Extension(db): Extension<DatabaseConnection>,
     Path(product_id): Path<i32>,
 ) -> impl IntoResponse {
-    // let db: DatabaseConnection =
-    //     Database::connect("postgresql://postgres:root@localhost:5432/products_db")
-    //         .await
-    //         .unwrap();
+    info!("Deleting product with ID: {}", product_id);
 
-    // Check if the product exists
-    let product_exist = product::Entity::find_by_id(product_id)
-        .one(&db)
-        .await
-        .unwrap();
+    match product::Entity::find_by_id(product_id).one(&db).await {
+        Ok(Some(_)) => {
+            match db.begin().await {
+                Ok(txn) => {
+                    // Delete associated items
+                    if let Err(err) = item::Entity::delete_many()
+                        .filter(item::Column::ProductId.eq(product_id))
+                        .exec(&txn)
+                        .await
+                    {
+                        error!("Failed to delete associated items for product ID {}: {:?}", product_id, err);
+                        txn.rollback().await.unwrap_or_else(|rollback_err| {
+                            error!("Failed to rollback transaction: {:?}", rollback_err);
+                        });
+                        return (StatusCode::INTERNAL_SERVER_ERROR, Json("Failed to delete associated items")).into_response();
+                    }
 
-    if product_exist.is_none() {
-        db.close().await.unwrap();
-        return (StatusCode::NOT_FOUND, Json("Product not found")).into_response();
+                    // Delete the product
+                    if let Err(err) = product::Entity::delete_by_id(product_id).exec(&txn).await {
+                        error!("Failed to delete product ID {}: {:?}", product_id, err);
+                        txn.rollback().await.unwrap_or_else(|rollback_err| {
+                            error!("Failed to rollback transaction: {:?}", rollback_err);
+                        });
+                        return (StatusCode::INTERNAL_SERVER_ERROR, Json("Failed to delete product")).into_response();
+                    }
+
+                    if let Err(err) = txn.commit().await {
+                        error!("Failed to commit transaction for deleting product ID {}: {:?}", product_id, err);
+                        return (StatusCode::INTERNAL_SERVER_ERROR, Json("Failed to commit transaction")).into_response();
+                    }
+
+                    info!("Product with ID {} and associated items successfully deleted", product_id);
+                    if let Err(err) = db.close().await {
+                        error!("Failed to close database connection: {:?}", err);
+                    }
+                    (StatusCode::OK, Json("Product and associated items deleted")).into_response()
+                }
+                Err(err) => {
+                    error!("Failed to start transaction for product ID {}: {:?}", product_id, err);
+                    (StatusCode::INTERNAL_SERVER_ERROR, Json("Failed to start transaction")).into_response()
+                }
+            }
+        }
+        Ok(None) => {
+            info!("Product with ID {} not found", product_id);
+            if let Err(err) = db.close().await {
+                error!("Failed to close database connection: {:?}", err);
+            }
+            (StatusCode::NOT_FOUND, Json("Product not found")).into_response()
+        }
+        Err(err) => {
+            error!("Failed to check existence of product ID {}: {:?}", product_id, err);
+            if let Err(err) = db.close().await {
+                error!("Failed to close database connection: {:?}", err);
+            }
+            (StatusCode::INTERNAL_SERVER_ERROR, Json("Failed to check product existence")).into_response()
+        }
     }
-
-    // Begin a transaction to ensure atomicity
-    let txn = db.begin().await.unwrap();
-
-    // Delete associated items first
-    item::Entity::delete_many()
-        .filter(item::Column::ProductId.eq(product_id))
-        .exec(&txn)
-        .await
-        .unwrap();
-
-    // Delete the product
-    product::Entity::delete_by_id(product_id)
-        .exec(&txn)
-        .await
-        .unwrap();
-
-    // Commit the transaction
-    txn.commit().await.unwrap();
-
-    db.close().await.unwrap();
-
-    (StatusCode::OK, Json("Product and associated items deleted")).into_response()
 }

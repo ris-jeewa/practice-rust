@@ -8,7 +8,11 @@ sea-orm = { version = "1.1.0", features = [ "sqlx-postgres", "runtime-tokio-rust
 tokio = { version = "1.42.0", features = ["full"] }
 axum = "0.7.9"
 serde = "1.0.215"
-chrono = "0.4.38"
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["unstable-locales"] }
 tower-http = {version="0.6.2",features=["cors"]}
 dotenv = "0.15.0"
 lazy_static = "1.5.0"
+tracing = "0.1.41"
+tracing-subscriber = "0.3.19"
+futures = "0.3.28"

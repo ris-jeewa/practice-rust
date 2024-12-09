@@ -13,6 +13,7 @@ mod utils;
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::fmt::init();
     server().await;
 }
 
@@ -23,6 +24,7 @@ async fn server() {
 
     let router = Router::new()
     .merge(routes::product_routes::product_routes())
+    .merge(routes::item_routes::item_routes())
     .layer(Extension(db));
  
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
@@ -72,60 +74,9 @@ async fn server() {
 
 
 
-async fn create_item(
-    Json(item_data): Json<ItemModel>,
-) -> impl IntoResponse {
-    let db: DatabaseConnection =
-        Database::connect("postgresql://postgres:root@localhost:5432/products_db")
-            .await
-            .unwrap();
-
-    let item = item::ActiveModel {
-        product_id: Set(item_data.product_id.to_owned()),
-        color: Set(item_data.color.to_owned()),
-        stock: Set(item_data.stock.to_owned()),
-        size: Set(item_data.size.to_owned()),
-        ..Default::default()
-    };
-
-    let _result = item.insert(&db).await.unwrap();
-
-    (StatusCode::CREATED, "Item created")
-}
 
 
 
 
-async fn delete_item(
-    Path(item_id): Path<i32>,
-) -> impl IntoResponse {
-    let db: DatabaseConnection =
-        Database::connect("postgresql://postgres:root@localhost:5432/products_db")
-            .await
-            .unwrap();
-
-    // Check if the item exists
-    let item_exist = item::Entity::find_by_id(item_id)
-        .one(&db)
-        .await
-        .unwrap();
-
-
-    if item_exist.is_none() {
-        // Item not found
-        (StatusCode::NOT_FOUND, Json("Item not found")).into_response();
-    } else {
-        // Delete the item
-        item::Entity::delete_by_id(item_id)
-            .exec(&db)
-            .await
-            .unwrap();
-
-        (StatusCode::OK, Json("Item deleted")).into_response();
-    }
-
-    db.close().await.unwrap();
-
-}
 
 
