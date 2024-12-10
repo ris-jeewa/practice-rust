@@ -43,14 +43,14 @@ cargo run
 ```
 
 ## API Endpoints
-GET /api/product/getall: get all products.
-POST /api/product/create: create a product
-PUT /api/product/{id}/update: Update a product
-DELETE /api/product/{id}/delete: Delete a product by ID.
-GET /api/item/{id} : get a item by id
-POST /api/item/create: create a item
-PUT /api/item/{id}/update : update a item by id
-DELETE /api/item/{id}/delete: delete a item by id
+- GET /api/product/getall: get all products.
+- POST /api/product/create: create a product
+- PUT /api/product/{id}/update: Update a product
+- DELETE /api/product/{id}/delete: Delete a product by ID.
+- GET /api/item/{id} : get a item by id
+- POST /api/item/create: create a item
+- PUT /api/item/{id}/update : update a item by id
+- DELETE /api/item/{id}/delete: delete a item by id
 
 ## Configuration
 The service uses environment variables and supports configuration via `.env` file.
