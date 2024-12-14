@@ -1,9 +1,38 @@
-use axum::{extract::Path, http::StatusCode, response::IntoResponse, Extension, Json};
+use axum::{extract::{Path, State}, http::{Method, StatusCode}, response::IntoResponse, routing::post, Extension, Json, Router};
 use chrono::{NaiveDateTime, Utc};
+use futures::stream::Any;
 use sea_orm::{ActiveModelTrait, ActiveValue::NotSet, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set, TransactionTrait};
+use tower_http::cors::CorsLayer;
 use tracing::{info, instrument,error};
 
-use crate::{entities::{item, product}, models::{item_model::ItemModel, product_model::{CreateProductModal, ProductItemModel, UpdateProductModal}}};
+use crate::{entities::{item, product}, models::{item_model::ItemModel, product_model::{CreateProductModal, ProductItemModel, UpdateProductModal, WholeProductModel}, ErrorModel}, services::product_service::{self, ProductService}};
+
+
+pub async fn create_product(
+    State(service):State<ProductService>,
+    Json(product_data): Json<CreateProductModal>,
+) -> impl IntoResponse{
+    
+    match service.create_product(product_data).await {
+        Ok(product) => {
+            info!("Product created successfully");
+            Ok((StatusCode::CREATED,Json(product)))
+        }
+        Err(ErrorModel::ValidationError(msg)) => {
+            error!("Failed to create product: {}", msg);
+            Err((StatusCode::BAD_REQUEST,Json(serde_json::json!({"error":msg}))))
+            
+        }
+        Err(ErrorModel::DatabaseError(msg)) => {
+            error!("Failed to create product: {}", msg);
+            Err((StatusCode::INTERNAL_SERVER_ERROR,Json(serde_json::json!({"error":msg}))))
+        }
+    }
+
+    
+    
+}
+
 
 #[instrument(skip(db))]
 pub async fn get_all_products(
@@ -50,37 +79,31 @@ pub async fn get_all_products(
     }
 }
 
-#[instrument(skip(db, product_data))]
-pub async fn create_product(
-    Extension(db): Extension<DatabaseConnection>,
-    Json(product_data): Json<CreateProductModal>,
-) -> impl IntoResponse {
-    info!("Creating a new product");
+// pub async fn create_product(
+//     State(service):State<ProductService>,
+//     Json(product_data): Json<CreateProductModal>,
+// ) -> Result<(StatusCode, Json<WholeProductModel>), (StatusCode, Json<serde_json::Value>)> {
+    
+//     match service.create_product(product_data).await {
+//         Ok(product) => {
+//             info!("Product created successfully");
+//             Ok((StatusCode::CREATED,Json(product)))
+//         }
+//         Err(ErrorModel::ValidationError(msg)) => {
+//             error!("Failed to create product: {}", msg);
+//             Err((StatusCode::BAD_REQUEST,Json(serde_json::json!({"error":msg}))))
+            
+//         }
+//         Err(ErrorModel::DatabaseError(msg)) => {
+//             error!("Failed to create product: {}", msg);
+//             Err((StatusCode::INTERNAL_SERVER_ERROR,Json(serde_json::json!({"error":msg}))))
+//         }
+//     }
 
-    let now: NaiveDateTime = Utc::now().naive_utc();
+    
+    
+// }
 
-    let product_model = product::ActiveModel {
-        name: Set(product_data.name.to_owned()),
-        description: Set(product_data.description.to_owned()),
-        created_at: Set(now),
-        updated_at: Set(now),
-        ..Default::default()
-    };
-
-    match product_model.insert(&db).await {
-        Ok(_result) => {
-            info!("Product successfully created");
-            (StatusCode::CREATED, "Product created")
-        }
-        Err(err) => {
-            error!("Failed to create product: {:?}", err);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to create product",
-            )
-        }
-    }
-}
 
 
 
