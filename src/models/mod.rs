@@ -6,3 +6,10 @@ pub enum ErrorModel {
     ValidationError(String),
     DatabaseError(String),
 }
+
+pub enum NotFoundErrorModel {
+    ValidationError(String),
+    DatabaseError(String),
+    NotFoundError(String),
+}
+

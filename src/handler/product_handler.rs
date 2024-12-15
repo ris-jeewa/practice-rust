@@ -1,11 +1,11 @@
 use axum::{extract::{Path, State}, http::{Method, StatusCode}, response::IntoResponse, routing::post, Extension, Json, Router};
 use chrono::{NaiveDateTime, Utc};
-use futures::stream::Any;
+use futures::{future::ok, stream::Any};
 use sea_orm::{ActiveModelTrait, ActiveValue::NotSet, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set, TransactionTrait};
 use tower_http::cors::CorsLayer;
 use tracing::{info, instrument,error};
 
-use crate::{entities::{item, product}, models::{item_model::ItemModel, product_model::{CreateProductModal, ProductItemModel, UpdateProductModal, WholeProductModel}, ErrorModel}, services::product_service::{self, ProductService}};
+use crate::{entities::{item, product}, models::{item_model::ItemModel, product_model::{CreateProductModal, ProductItemModel, UpdateProductModal, WholeProductModel}, ErrorModel, NotFoundErrorModel}, services::product_service::{self, ProductService}};
 
 
 pub async fn create_product(
@@ -34,137 +34,60 @@ pub async fn create_product(
 }
 
 
-#[instrument(skip(db))]
 pub async fn get_all_products(
-    Extension(db): Extension<DatabaseConnection>,
+    State(service): State<ProductService>,
 ) -> impl IntoResponse {
     info!("Fetching all products with related items");
-
-    match product::Entity::find()
-        .find_with_related(item::Entity)
-        .all(&db)
-        .await
-    {
-        Ok(products_with_items) => {
-            let response: Vec<ProductItemModel> = products_with_items
-                .into_iter()
-                .map(|(product, items)| ProductItemModel {
-                    id: product.id,
-                    name: product.name,
-                    description: product.description,
-                    items: items
-                    .into_iter()
-                    .map(|item| ItemModel {
-                        id: Some(item.id),
-                        product_id: item.product_id,
-                        color: item.color.unwrap_or_default(), 
-                        size: item.size.unwrap_or_default(),  
-                        stock: item.stock,
-                    })
-                    .collect()
-                })
-                .collect();
-
-            info!("Successfully fetched {} products", response.len());
-
-            (StatusCode::OK, Json(response))
+    match service.get_all_products().await {
+        Ok(products) => {
+            info!("Products fetched successfully");
+            Ok((StatusCode::OK, Json(products)))
         }
-        Err(err) => {
-            error!("Failed to fetch products: {:?}", err);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(vec![]),
+        Err(ErrorModel::ValidationError(msg)) => {
+            error!("Failed to create product: {}", msg);
+            Err((StatusCode::BAD_REQUEST,Json(serde_json::json!({"error":msg}))))
+            
+        }
+        Err(ErrorModel::DatabaseError(msg)) => {
+            error!("Failed to fetch products: {}", msg);
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": msg})))
             )
         }
+        
     }
+
 }
 
-// pub async fn create_product(
-//     State(service):State<ProductService>,
-//     Json(product_data): Json<CreateProductModal>,
-// ) -> Result<(StatusCode, Json<WholeProductModel>), (StatusCode, Json<serde_json::Value>)> {
-    
-//     match service.create_product(product_data).await {
-//         Ok(product) => {
-//             info!("Product created successfully");
-//             Ok((StatusCode::CREATED,Json(product)))
-//         }
-//         Err(ErrorModel::ValidationError(msg)) => {
-//             error!("Failed to create product: {}", msg);
-//             Err((StatusCode::BAD_REQUEST,Json(serde_json::json!({"error":msg}))))
-            
-//         }
-//         Err(ErrorModel::DatabaseError(msg)) => {
-//             error!("Failed to create product: {}", msg);
-//             Err((StatusCode::INTERNAL_SERVER_ERROR,Json(serde_json::json!({"error":msg}))))
-//         }
-//     }
-
-    
-    
-// }
-
-
-
-
-#[instrument(skip(db, product_data))]
 pub async fn update_product(
-    Extension(db): Extension<DatabaseConnection>,
+    State(service): State<ProductService>,
     Path(product_id): Path<i32>,
     Json(product_data): Json<UpdateProductModal>,
 ) -> impl IntoResponse {
-    info!("Updating product with ID: {}", product_id);
-
-    let now: NaiveDateTime = Utc::now().naive_utc();
-
-    // Fetch the product to update
-    let product_result = product::Entity::find()
-        .filter(product::Column::Id.eq(product_id))
-        .one(&db)
-        .await;
-
-    match product_result {
-        Ok(Some(existing_product)) => {
-            let mut updated_product: product::ActiveModel = existing_product.into();
-
-            updated_product.name = match product_data.name {
-                Some(name) => Set(name),
-                None => NotSet,
-            };
-
-            updated_product.description = Set(product_data.description);
-            updated_product.updated_at = Set(now);
-
-            match updated_product.update(&db).await {
-                Ok(_) => {
-                    info!("Product with ID {} updated successfully", product_id);
-                    if let Err(e) = db.close().await {
-                        error!("Failed to close the database connection: {:?}", e);
-                    }
-                    (StatusCode::ACCEPTED, "Product updated")
-                }
-                Err(err) => {
-                    error!("Failed to update product with ID {}: {:?}", product_id, err);
-                    (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "Failed to update product",
-                    )
-                }
-            }
+    match service.update_product(product_id, product_data).await {
+        Ok(product) => {
+            info!("Product with ID {} updated successfully", product_id);
+            Ok((StatusCode::ACCEPTED, Json(product)))
         }
-        Ok(None) => {
-            error!("Product with ID {} not found", product_id);
-            (
-                StatusCode::NOT_FOUND,
-                "Product not found",
-            )
+        Err(NotFoundErrorModel::ValidationError(msg)) => {
+            error!("Product validation failed: {}", msg);
+            Err((
+                StatusCode::BAD_REQUEST, 
+                Json(serde_json::json!({"error": msg}))
+            ))
         }
-        Err(err) => {
-            error!("Failed to fetch product with ID {}: {:?}", product_id, err);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to fetch product",
-            )
+        Err(NotFoundErrorModel::NotFoundError(msg)) => {
+            error!("Failed to update product with ID {}: {}", product_id, msg);
+            Err((
+                StatusCode::NOT_FOUND, 
+                Json(serde_json::json!({"error": msg}))
+            ))
+        }
+        Err(NotFoundErrorModel::DatabaseError(msg)) => {
+            error!("Database error when updating product: {}", msg);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR, 
+                Json(serde_json::json!({"error": msg}))
+            ))
         }
     }
 }
