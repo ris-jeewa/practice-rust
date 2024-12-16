@@ -92,56 +92,91 @@ pub async fn update_product(
     }
 }
 
-#[instrument(skip(db))]
-pub async fn delete_product(
-    Extension(db): Extension<DatabaseConnection>,
-    Path(product_id): Path<i32>,
-) -> impl IntoResponse {
-    info!("Deleting product with ID: {}", product_id);
 
-    match db.begin().await {
-        Ok(txn) => {
-            // Delete associated items
-            match item::Entity::delete_many()
-                .filter(item::Column::ProductId.eq(product_id))
-                .exec(&txn)
-                .await
-            {
-                Ok(_) => {
-                    // Delete the product
-                    match product::Entity::delete_by_id(product_id).exec(&txn).await {
-                        Ok(delete_result) => {
-                            if delete_result.rows_affected > 0 {
-                                if txn.commit().await.is_ok() {
-                                    info!("Product with ID {} and associated items successfully deleted", product_id);
-                                    (StatusCode::OK, Json("Product and associated items deleted")).into_response()
-                                } else {
-                                    error!("Failed to commit transaction for product ID {}", product_id);
-                                    (StatusCode::INTERNAL_SERVER_ERROR, Json("Failed to commit transaction")).into_response()
-                                }
-                            } else {
-                                txn.rollback().await.ok();
-                                info!("Product with ID {} not found", product_id);
-                                (StatusCode::NOT_FOUND, Json("Product not found")).into_response()
-                            }
-                        }
-                        Err(err) => {
-                            txn.rollback().await.ok();
-                            error!("Failed to delete product ID {}: {:?}", product_id, err);
-                            (StatusCode::INTERNAL_SERVER_ERROR, Json("Failed to delete product")).into_response()
-                        }
-                    }
-                }
-                Err(err) => {
-                    txn.rollback().await.ok();
-                    error!("Failed to delete associated items for product ID {}: {:?}", product_id, err);
-                    (StatusCode::INTERNAL_SERVER_ERROR, Json("Failed to delete associated items")).into_response()
-                }
-            }
+pub async fn delete_product(
+    State(service): State<ProductService>,
+    Path(product_id): Path<i32>,
+)-> impl IntoResponse{
+    match service.delete_product(product_id).await {
+        Ok(_) => {
+            info!("Product with ID {} deleted successfully", product_id);
+            Ok((StatusCode::OK, Json("Product deleted")))
         }
-        Err(err) => {
-            error!("Failed to start transaction for product ID {}: {:?}", product_id, err);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json("Failed to start transaction")).into_response()
+        Err(NotFoundErrorModel::ValidationError(msg)) => {
+            error!("Product validation failed: {}", msg);
+            Err((
+                StatusCode::BAD_REQUEST, 
+                Json(serde_json::json!({"error": msg}))
+            ))
+        }
+        Err(NotFoundErrorModel::NotFoundError(msg)) => {
+            error!("Failed to delete product with ID {}: {}", product_id, msg);
+            Err((
+                StatusCode::NOT_FOUND, 
+                Json(serde_json::json!({"error": msg}))
+            ))
+        }
+        Err(NotFoundErrorModel::DatabaseError(msg)) => {
+            error!("Database error when deleting product: {}", msg);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR, 
+                Json(serde_json::json!({"error": msg}))
+            ))
         }
     }
+    
 }
+
+// #[instrument(skip(db))]
+// pub async fn delete_product(
+//     Extension(db): Extension<DatabaseConnection>,
+//     Path(product_id): Path<i32>,
+// ) -> impl IntoResponse {
+//     info!("Deleting product with ID: {}", product_id);
+
+//     match db.begin().await {
+//         Ok(txn) => {
+//             // Delete associated items
+//             match item::Entity::delete_many()
+//                 .filter(item::Column::ProductId.eq(product_id))
+//                 .exec(&txn)
+//                 .await
+//             {
+//                 Ok(_) => {
+//                     // Delete the product
+//                     match product::Entity::delete_by_id(product_id).exec(&txn).await {
+//                         Ok(delete_result) => {
+//                             if delete_result.rows_affected > 0 {
+//                                 if txn.commit().await.is_ok() {
+//                                     info!("Product with ID {} and associated items successfully deleted", product_id);
+//                                     (StatusCode::OK, Json("Product and associated items deleted")).into_response()
+//                                 } else {
+//                                     error!("Failed to commit transaction for product ID {}", product_id);
+//                                     (StatusCode::INTERNAL_SERVER_ERROR, Json("Failed to commit transaction")).into_response()
+//                                 }
+//                             } else {
+//                                 txn.rollback().await.ok();
+//                                 info!("Product with ID {} not found", product_id);
+//                                 (StatusCode::NOT_FOUND, Json("Product not found")).into_response()
+//                             }
+//                         }
+//                         Err(err) => {
+//                             txn.rollback().await.ok();
+//                             error!("Failed to delete product ID {}: {:?}", product_id, err);
+//                             (StatusCode::INTERNAL_SERVER_ERROR, Json("Failed to delete product")).into_response()
+//                         }
+//                     }
+//                 }
+//                 Err(err) => {
+//                     txn.rollback().await.ok();
+//                     error!("Failed to delete associated items for product ID {}: {:?}", product_id, err);
+//                     (StatusCode::INTERNAL_SERVER_ERROR, Json("Failed to delete associated items")).into_response()
+//                 }
+//             }
+//         }
+//         Err(err) => {
+//             error!("Failed to start transaction for product ID {}: {:?}", product_id, err);
+//             (StatusCode::INTERNAL_SERVER_ERROR, Json("Failed to start transaction")).into_response()
+//         }
+//     }
+// }

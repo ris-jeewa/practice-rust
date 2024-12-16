@@ -44,4 +44,10 @@ impl ProductService {
             .update_product_in_db(product_id, request)
             .await
     }
+
+    pub async fn delete_product(&self, product_id: i32) -> Result<bool, NotFoundErrorModel> {
+        self.product_repository
+            .delete_product_in_db(product_id)
+            .await
+    }
 }
