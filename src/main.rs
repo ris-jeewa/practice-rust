@@ -24,15 +24,15 @@ async fn main() {
 }
 
 async fn server(db: DatabaseConnection) {
-    // let product_repository = ProductRepository::new(db);
+    let product_repository = ProductRepository::new(db.clone());
     let item_repository = ItemRepository::new(db);
 
-    // let product_service = ProductService::new(product_repository);
+    let product_service = ProductService::new(product_repository);
 
     let item_service = ItemService::new(item_repository);
 
     let router = Router::new()
-        // .merge(product_routes(product_service));
+        .merge(product_routes(product_service))
         .merge(item_routes(item_service));
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
