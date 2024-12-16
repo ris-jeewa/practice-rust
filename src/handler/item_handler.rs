@@ -2,35 +2,7 @@ use axum::{extract::{Path, State}, http::{header::CONTENT_TYPE, StatusCode}, res
 use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait, Set};
 use tracing::{error, info, instrument, warn};
 
-use crate::{entities::item, models::{item_model::{self, CreateItemModel, ItemModel, UpdateItemModel}, ErrorModel}, services::item_service::ItemService};
-
-
-// #[instrument(skip(db, item_data))]
-// pub async fn create_item(
-//     Extension(db): Extension<DatabaseConnection>,
-//     Json(item_data): Json<ItemModel>,
-// ) -> impl IntoResponse {
-//     info!("Creating a item");
-
-//     let item = item::ActiveModel {
-//         product_id: Set(item_data.product_id.to_owned()),
-//         color: Set(Some(item_data.color.to_owned())), 
-//         stock: Set(item_data.stock.to_owned()),
-//         size: Set(Some(item_data.size.to_owned())),   
-//         ..Default::default()
-//     };
-
-//     match item.insert(&db).await {
-//         Ok(_result) => {
-//             info!("Item created successfully with product_id: {}", item_data.product_id);
-//             (StatusCode::CREATED, "Item created")
-//         },
-//         Err(err) => {
-//             error!("Failed to create item: {:?}", err);
-//             (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create item")
-//         }
-//     }
-// }
+use crate::{entities::item, models::{item_model::{self, CreateItemModel, ItemModel, UpdateItemModel}, ErrorModel, NotFoundErrorModel}, services::item_service::ItemService};
 
 pub async fn create_item(
     State(service): State<ItemService>,
@@ -54,27 +26,54 @@ pub async fn create_item(
 
 }
 
-#[instrument(skip(db))]
-pub async fn delete_item(
-    Extension(db): Extension<DatabaseConnection>,
-    Path(item_id): Path<i32>,
-) -> impl IntoResponse {
-    info!("Attempting to delete item with ID: {}", item_id);
+// #[instrument(skip(db))]
+// pub async fn delete_item(
+//     Extension(db): Extension<DatabaseConnection>,
+//     Path(item_id): Path<i32>,
+// ) -> impl IntoResponse {
+//     info!("Attempting to delete item with ID: {}", item_id);
 
-    // Directly attempt to delete the item
-    match item::Entity::delete_by_id(item_id).exec(&db).await {
-        Ok(delete_result) => {
-            if delete_result.rows_affected > 0 {
-                info!("Item with ID: {} deleted successfully", item_id);
-                (StatusCode::OK, Json("Item deleted")).into_response()
-            } else {
-                info!("Item with ID: {} not found", item_id);
-                (StatusCode::NOT_FOUND, Json("Item not found")).into_response()
-            }
-        },
-        Err(err) => {
-            error!("Failed to delete item with ID: {}: {:?}", item_id, err);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json("Failed to delete item")).into_response()
+//     // Directly attempt to delete the item
+//     match item::Entity::delete_by_id(item_id).exec(&db).await {
+//         Ok(delete_result) => {
+//             if delete_result.rows_affected > 0 {
+//                 info!("Item with ID: {} deleted successfully", item_id);
+//                 (StatusCode::OK, Json("Item deleted")).into_response()
+//             } else {
+//                 info!("Item with ID: {} not found", item_id);
+//                 (StatusCode::NOT_FOUND, Json("Item not found")).into_response()
+//             }
+//         },
+//         Err(err) => {
+//             error!("Failed to delete item with ID: {}: {:?}", item_id, err);
+//             (StatusCode::INTERNAL_SERVER_ERROR, Json("Failed to delete item")).into_response()
+//         }
+//     }
+// }
+
+pub async fn delete_item(
+    State(service): State<ItemService>,
+    Path(item_id): Path<i32>,
+)-> impl IntoResponse {
+    match service.delete_item(item_id).await {
+        Ok(_) => {
+            info!("Item deleted successfully");
+            Ok((StatusCode::OK,Json("Item deleted")))
+        }
+        Err(NotFoundErrorModel::ValidationError(msg)) => {
+            error!("Failed to delete item");
+            Err((StatusCode::BAD_REQUEST,Json(serde_json::json!({"error":msg})))
+            )
+        }
+        Err(NotFoundErrorModel::DatabaseError(msg)) => {
+            error!("Failed to delete item");
+            Err((StatusCode::INTERNAL_SERVER_ERROR,Json(serde_json::json!({"error":msg})))
+            )
+        }
+        Err(NotFoundErrorModel::NotFoundError(msg)) => {
+            error!("Failed to delete item");
+            Err((StatusCode::NOT_FOUND,Json(serde_json::json!({"error":msg})))
+            )
         }
     }
 }

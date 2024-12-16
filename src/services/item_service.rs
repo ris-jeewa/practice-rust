@@ -1,4 +1,4 @@
-use crate::{models::{item_model::{CreateItemModel, ItemModel}, ErrorModel}, repositories::item_repository::ItemRepository};
+use crate::{models::{item_model::{CreateItemModel, ItemModel}, ErrorModel, NotFoundErrorModel}, repositories::item_repository::ItemRepository};
 
 #[derive(Clone)]
 pub struct ItemService {
@@ -22,5 +22,9 @@ impl ItemService {
         }
 
         self.item_repository.create_item_in_db(request).await
+    }
+
+    pub async fn delete_item(&self, item_id: i32) -> Result<bool, NotFoundErrorModel> {
+        self.item_repository.delete_item_in_db(item_id).await
     }
 }

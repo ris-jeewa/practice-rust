@@ -1,6 +1,6 @@
-use sea_orm::DatabaseConnection;
+use sea_orm::{DatabaseConnection, EntityTrait};
 
-use crate::{entities::item, models::{item_model::{CreateItemModel, ItemModel}, ErrorModel}};
+use crate::{entities::item, models::{item_model::{CreateItemModel, ItemModel}, ErrorModel, NotFoundErrorModel}};
 use sea_orm::{
     ActiveModelTrait,Set,
 };
@@ -37,4 +37,38 @@ impl ItemRepository {
             )),
         }
     }
+
+    pub async fn delete_item_in_db(&self, item_id: i32) -> Result<bool, NotFoundErrorModel> {
+        match self.find_item(item_id).await {
+            Ok(item) => {
+                match item::Entity::delete_by_id(item_id).exec(&self.db).await {
+                    Ok(delete_result) => {
+                        if delete_result.rows_affected > 0 {
+                            Ok(true)
+                        } else {
+                            Ok(false)
+                        }
+                    },
+                    Err(err) => Err(NotFoundErrorModel::DatabaseError(format!(
+                        "Failed to delete item: {}",
+                        err
+                    ))),
+                }
+            }
+            Err(err) => Err(NotFoundErrorModel::DatabaseError(format!(
+                "Failed to update product: {}",
+                err
+            )))
+        }
+
+        
+    }
+
+    pub async fn find_item(
+        &self,
+        item_id: i32,
+    ) -> Result<Option<item::Model>, sea_orm::DbErr> {
+        item::Entity::find_by_id(item_id).one(&self.db).await
+    }
+    
 }
