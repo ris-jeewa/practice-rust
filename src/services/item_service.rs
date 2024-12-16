@@ -1,4 +1,4 @@
-use crate::{models::{item_model::{CreateItemModel, ItemModel}, ErrorModel, NotFoundErrorModel}, repositories::item_repository::ItemRepository};
+use crate::{models::{item_model::{CreateItemModel, ItemModel, UpdateItemModel}, ErrorModel, NotFoundErrorModel}, repositories::item_repository::ItemRepository};
 
 #[derive(Clone)]
 pub struct ItemService {
@@ -26,5 +26,18 @@ impl ItemService {
 
     pub async fn delete_item(&self, item_id: i32) -> Result<bool, NotFoundErrorModel> {
         self.item_repository.delete_item_in_db(item_id).await
+    }
+
+    pub async fn update_item(
+        &self,
+        item_id: i32,
+        request: UpdateItemModel,
+    ) -> Result<ItemModel, NotFoundErrorModel> {
+        self.item_repository.update_item_in_db(item_id, request).await
+    }
+
+
+    pub async fn get_item_by_id(&self, item_id: i32) -> Result<ItemModel, NotFoundErrorModel> {
+        self.item_repository.get_item_by_id_from_db(item_id).await
     }
 }

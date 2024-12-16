@@ -1,6 +1,6 @@
-use sea_orm::{DatabaseConnection, EntityTrait};
+use sea_orm::{ActiveValue::NotSet, DatabaseConnection, EntityTrait};
 
-use crate::{entities::item, models::{item_model::{CreateItemModel, ItemModel}, ErrorModel, NotFoundErrorModel}};
+use crate::{entities::item, models::{item_model::{CreateItemModel, ItemModel, UpdateItemModel}, ErrorModel, NotFoundErrorModel}};
 use sea_orm::{
     ActiveModelTrait,Set,
 };
@@ -61,6 +61,74 @@ impl ItemRepository {
             )))
         }
 
+        
+    }
+
+    pub async fn update_item_in_db(
+        &self,
+        item_id: i32,
+        item_data: UpdateItemModel,
+    ) -> Result<ItemModel, NotFoundErrorModel> {
+        match self.find_item(item_id).await {
+            Ok(Some(item)) => {
+                let mut updated_item: item::ActiveModel = item.into();
+    
+                updated_item.size = match item_data.size {
+                    Some(size) => Set(size),
+                    None => NotSet,
+                };
+                updated_item.color = match item_data.color {
+                    Some(color) => Set(color),
+                    None => NotSet,
+                };
+                updated_item.stock = match item_data.stock {
+                    Some(stock) => Set(stock),
+                    None => NotSet,
+                };
+    
+                match updated_item.update(&self.db).await {
+                    Ok(updated_item) => Ok(ItemModel {
+                        id: updated_item.id,
+                        product_id: updated_item.product_id,
+                        color: updated_item.color,
+                        stock: updated_item.stock,
+                        size: updated_item.size,
+                    }),
+                    Err(err) => Err(NotFoundErrorModel::DatabaseError(format!(
+                        "Failed to update item: {}",
+                        err
+                    ))),
+                }
+            }
+            Ok(None) => Err(NotFoundErrorModel::NotFoundError(format!(
+                "Item with ID {} not found",
+                item_id
+            ))),
+            Err(err) => Err(NotFoundErrorModel::DatabaseError(format!(
+                "Failed to retrieve item: {}",
+                err
+            ))),
+        }
+    }
+    
+
+    pub async fn get_item_by_id_from_db(&self,item_id: i32) -> Result<ItemModel, NotFoundErrorModel> {
+        match self.find_item(item_id).await {
+            Ok(Some(item)) => Ok(ItemModel {
+                id: item.id,
+                product_id: item.product_id,
+                color: item.color,
+                size: item.size,
+                stock: item.stock,
+            }),
+            Ok(None) => Err(NotFoundErrorModel::NotFoundError(
+                "Item not found".to_string(),
+            )),
+            Err(err) => Err(NotFoundErrorModel::DatabaseError(format!(
+                "Failed to fetch item: {}",
+                err
+            ))),
+        }
         
     }
 

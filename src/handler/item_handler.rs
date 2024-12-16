@@ -1,4 +1,4 @@
-use axum::{extract::{Path, State}, http::{header::CONTENT_TYPE, StatusCode}, response::{IntoResponse, Json, Response}, Extension};
+use axum::{extract::{Path, State}, http::{header::CONTENT_TYPE, request, StatusCode}, response::{IntoResponse, Json, Response}, Extension};
 use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait, Set};
 use tracing::{error, info, instrument, warn};
 
@@ -26,30 +26,6 @@ pub async fn create_item(
 
 }
 
-// #[instrument(skip(db))]
-// pub async fn delete_item(
-//     Extension(db): Extension<DatabaseConnection>,
-//     Path(item_id): Path<i32>,
-// ) -> impl IntoResponse {
-//     info!("Attempting to delete item with ID: {}", item_id);
-
-//     // Directly attempt to delete the item
-//     match item::Entity::delete_by_id(item_id).exec(&db).await {
-//         Ok(delete_result) => {
-//             if delete_result.rows_affected > 0 {
-//                 info!("Item with ID: {} deleted successfully", item_id);
-//                 (StatusCode::OK, Json("Item deleted")).into_response()
-//             } else {
-//                 info!("Item with ID: {} not found", item_id);
-//                 (StatusCode::NOT_FOUND, Json("Item not found")).into_response()
-//             }
-//         },
-//         Err(err) => {
-//             error!("Failed to delete item with ID: {}: {:?}", item_id, err);
-//             (StatusCode::INTERNAL_SERVER_ERROR, Json("Failed to delete item")).into_response()
-//         }
-//     }
-// }
 
 pub async fn delete_item(
     State(service): State<ItemService>,
@@ -135,45 +111,114 @@ pub async fn delete_item(
 // }
 
 
-#[instrument(skip(db))]
-pub async fn get_item_by_id(
-    Path(id): Path<i32>,                          // Extract the ID from the URL path
-    Extension(db): Extension<DatabaseConnection>, // Pass the database connection
-) -> Response {
-    info!("Fetching item with ID: {}", id);
+pub async fn update_item(
+    State(service): State<ItemService>,
+    Path(item_id): Path<i32>,
+    Json(item_data): Json<UpdateItemModel>,
+)->impl IntoResponse{
+    match service.update_item(item_id,item_data).await {
+        Ok(item) => {
+            info!("Item with ID {} updated successfully", item_id);
+            Ok((StatusCode::ACCEPTED,Json(item)))
+        }
+        Err(NotFoundErrorModel::ValidationError(msg)) => {
+            error!("Item validation failed: {}", msg);
+            Err((
+                StatusCode::BAD_REQUEST, 
+                Json(serde_json::json!({"error": msg}))
+            ))
+        }
+        Err(NotFoundErrorModel::NotFoundError(msg)) => {
+            error!("Failed to update item with ID {}: {}", item_id, msg);
+            Err((
+                StatusCode::NOT_FOUND, 
+                Json(serde_json::json!({"error": msg}))
+            ))
+        }
+        Err(NotFoundErrorModel::DatabaseError(msg)) => {
+            error!("Database error when updating item: {}", msg);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR, 
+                Json(serde_json::json!({"error": msg}))
+            ))
+        }
+    }
+}
 
-    match item::Entity::find_by_id(id).one(&db).await {
-        Ok(Some(item)) => {
-            info!("Successfully fetched item with ID: {}", id);
+
+// #[instrument(skip(db))]
+// pub async fn get_item_by_id(
+//     Path(id): Path<i32>,                          // Extract the ID from the URL path
+//     Extension(db): Extension<DatabaseConnection>, // Pass the database connection
+// ) -> Response {
+//     info!("Fetching item with ID: {}", id);
+
+//     match item::Entity::find_by_id(id).one(&db).await {
+//         Ok(Some(item)) => {
+//             info!("Successfully fetched item with ID: {}", id);
             
-            let json_response = item_model::ItemModel {
-                id: item.id,
-                product_id: item.product_id,
-                color: item.color,
-                size: item.size,
-                stock: item.stock,
-            };
+//             let json_response = item_model::ItemModel {
+//                 id: item.id,
+//                 product_id: item.product_id,
+//                 color: item.color,
+//                 size: item.size,
+//                 stock: item.stock,
+//             };
         
-            Response::builder()
-                .status(StatusCode::OK)
-                .header(CONTENT_TYPE, "application/json")
-                .body(serde_json::to_string(&json_response).unwrap().into())
-                .unwrap()
-        }
+//             Response::builder()
+//                 .status(StatusCode::OK)
+//                 .header(CONTENT_TYPE, "application/json")
+//                 .body(serde_json::to_string(&json_response).unwrap().into())
+//                 .unwrap()
+//         }
 
-        Ok(None) => {
-            warn!("Item with ID: {} not found", id);
-            Response::builder()
-                .status(StatusCode::NOT_FOUND)
-                .body("Item not found".into())
-                .unwrap()
+//         Ok(None) => {
+//             warn!("Item with ID: {} not found", id);
+//             Response::builder()
+//                 .status(StatusCode::NOT_FOUND)
+//                 .body("Item not found".into())
+//                 .unwrap()
+//         }
+//         Err(err) => {
+//             error!("Failed to retrieve item with ID: {}: {:?}", id, err);
+//             Response::builder()
+//                 .status(StatusCode::INTERNAL_SERVER_ERROR)
+//                 .body("Failed to retrieve item".into())
+//                 .unwrap()
+//         }
+//     }
+// }
+
+pub async fn get_item_by_id(
+    State(service): State<ItemService>,
+    Path(item_id): Path<i32>,                       
+) -> impl IntoResponse {
+    match service.get_item_by_id(item_id).await {
+        Ok(item) => {
+            info!("Item fetched successfully");
+            Ok((StatusCode::OK,Json(item)))
         }
-        Err(err) => {
-            error!("Failed to retrieve item with ID: {}: {:?}", id, err);
-            Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body("Failed to retrieve item".into())
-                .unwrap()
+        Err(NotFoundErrorModel::ValidationError(msg)) => {
+            error!("Item validation failed: {}", msg);
+            Err((
+                StatusCode::BAD_REQUEST, 
+                Json(serde_json::json!({"error": msg}))
+            ))
         }
+        Err(NotFoundErrorModel::NotFoundError(msg)) => {
+            error!("Failed to fetch item");
+            Err((
+                StatusCode::NOT_FOUND, 
+                Json(serde_json::json!({"error": msg}))
+            ))
+        }
+        Err(NotFoundErrorModel::DatabaseError(msg)) => {
+            error!("Database error when fetching item");
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR, 
+                Json(serde_json::json!({"error": msg}))
+            ))
+        }
+        
     }
 }
