@@ -1,8 +1,9 @@
 use axum::Router;
 use repositories::{item_repository::ItemRepository, product_repository::ProductRepository};
 use routes::{item_routes::item_routes, product_routes::product_routes};
-use sea_orm::{Database, DatabaseConnection};
+use sea_orm::{DatabaseConnection};
 use services::{item_service::ItemService, product_service::ProductService};
+use utils::db::establish_connection;
 
 mod entities;
 mod handler;
@@ -15,10 +16,9 @@ mod utils;
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
-    let conn_str = (*utils::constants::DATABASE_URL).clone();
-    let db = Database::connect(conn_str)
-        .await
-        .expect("Failed to connect to db");
+
+    // Establish database connection
+    let db = establish_connection().await;
 
     server(db).await;
 }
