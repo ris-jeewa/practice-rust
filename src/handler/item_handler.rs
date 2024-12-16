@@ -1,34 +1,57 @@
-use axum::{extract::Path, http::{header::CONTENT_TYPE, StatusCode}, response::{IntoResponse, Json, Response}, Extension};
+use axum::{extract::{Path, State}, http::{header::CONTENT_TYPE, StatusCode}, response::{IntoResponse, Json, Response}, Extension};
 use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait, Set};
 use tracing::{error, info, instrument, warn};
 
-use crate::{entities::item, models::item_model::{self, ItemModel, UpdateItemModel}};
+use crate::{entities::item, models::{item_model::{self, CreateItemModel, ItemModel, UpdateItemModel}, ErrorModel}, services::item_service::ItemService};
 
-#[instrument(skip(db, item_data))]
+
+// #[instrument(skip(db, item_data))]
+// pub async fn create_item(
+//     Extension(db): Extension<DatabaseConnection>,
+//     Json(item_data): Json<ItemModel>,
+// ) -> impl IntoResponse {
+//     info!("Creating a item");
+
+//     let item = item::ActiveModel {
+//         product_id: Set(item_data.product_id.to_owned()),
+//         color: Set(Some(item_data.color.to_owned())), 
+//         stock: Set(item_data.stock.to_owned()),
+//         size: Set(Some(item_data.size.to_owned())),   
+//         ..Default::default()
+//     };
+
+//     match item.insert(&db).await {
+//         Ok(_result) => {
+//             info!("Item created successfully with product_id: {}", item_data.product_id);
+//             (StatusCode::CREATED, "Item created")
+//         },
+//         Err(err) => {
+//             error!("Failed to create item: {:?}", err);
+//             (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create item")
+//         }
+//     }
+// }
+
 pub async fn create_item(
-    Extension(db): Extension<DatabaseConnection>,
-    Json(item_data): Json<ItemModel>,
-) -> impl IntoResponse {
-    info!("Creating a item");
-
-    let item = item::ActiveModel {
-        product_id: Set(item_data.product_id.to_owned()),
-        color: Set(Some(item_data.color.to_owned())), 
-        stock: Set(item_data.stock.to_owned()),
-        size: Set(Some(item_data.size.to_owned())),   
-        ..Default::default()
-    };
-
-    match item.insert(&db).await {
-        Ok(_result) => {
-            info!("Item created successfully with product_id: {}", item_data.product_id);
-            (StatusCode::CREATED, "Item created")
-        },
-        Err(err) => {
-            error!("Failed to create item: {:?}", err);
-            (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create item")
+    State(service): State<ItemService>,
+    Json(item_data): Json<CreateItemModel>,
+)-> impl IntoResponse{
+    match service.create_item(item_data).await {
+        Ok(item) => {
+            info!("Item created successfully");
+            Ok((StatusCode::CREATED,Json(item)))
+        }
+        Err(ErrorModel::ValidationError(msg)) => {
+            error!("Failed to create item");
+            Err((StatusCode::BAD_REQUEST,Json(serde_json::json!({"error":msg}))))
+            
+        }
+        Err(ErrorModel::DatabaseError(msg)) => {
+            error!("Failed to create item");
+            Err((StatusCode::INTERNAL_SERVER_ERROR,Json(serde_json::json!({"error":msg}))))
         }
     }
+
 }
 
 #[instrument(skip(db))]
@@ -56,61 +79,61 @@ pub async fn delete_item(
     }
 }
 
-#[instrument(skip(db, item_data))]
-pub async fn update_item(
-    Extension(db): Extension<DatabaseConnection>,
-    Path(item_id): Path<i32>,
-    Json(item_data): Json<UpdateItemModel>,
-) -> impl IntoResponse {
-    info!("Updating item with ID: {}", item_id);
+// #[instrument(skip(db, item_data))]
+// pub async fn update_item(
+//     Extension(db): Extension<DatabaseConnection>,
+//     Path(item_id): Path<i32>,
+//     Json(item_data): Json<UpdateItemModel>,
+// ) -> impl IntoResponse {
+//     info!("Updating item with ID: {}", item_id);
 
-    // Fetch the product to update
-    let product_result = item::Entity::find_by_id(item_id)
-        .one(&db)
-        .await;
+//     // Fetch the product to update
+//     let product_result = item::Entity::find_by_id(item_id)
+//         .one(&db)
+//         .await;
 
-    match product_result {
-        Ok(Some(existing_item)) => {
-            let mut updated_item: item::ActiveModel = existing_item.into();
+//     match product_result {
+//         Ok(Some(existing_item)) => {
+//             let mut updated_item: item::ActiveModel = existing_item.into();
 
-            updated_item.size = Set(item_data.size);
-            updated_item.color = Set(item_data.color);
+//             updated_item.size = Set(item_data.size);
+//             updated_item.color = Set(item_data.color);
 
-            updated_item.stock = Set(item_data.stock.unwrap_or(0)); 
+//             updated_item.stock = Set(item_data.stock.unwrap_or(0)); 
 
-            match updated_item.update(&db).await {
-                Ok(_) => {
-                    info!("Item with ID {} updated successfully", item_id);
-                    if let Err(e) = db.close().await {
-                        error!("Failed to close the database connection: {:?}", e);
-                    }
-                    (StatusCode::ACCEPTED, "Item updated")
-                }
-                Err(err) => {
-                    error!("Failed to update item with ID {}: {:?}", item_id, err);
-                    (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "Failed to update item",
-                    )
-                }
-            }
-        }
-        Ok(None) => {
-            error!("Item with ID {} not found", item_id);
-            (
-                StatusCode::NOT_FOUND,
-                "Item not found",
-            )
-        }
-        Err(err) => {
-            error!("Failed to fetch item with ID {}: {:?}", item_id, err);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to fetch item",
-            )
-        }
-    }
-}
+//             match updated_item.update(&db).await {
+//                 Ok(_) => {
+//                     info!("Item with ID {} updated successfully", item_id);
+//                     if let Err(e) = db.close().await {
+//                         error!("Failed to close the database connection: {:?}", e);
+//                     }
+//                     (StatusCode::ACCEPTED, "Item updated")
+//                 }
+//                 Err(err) => {
+//                     error!("Failed to update item with ID {}: {:?}", item_id, err);
+//                     (
+//                         StatusCode::INTERNAL_SERVER_ERROR,
+//                         "Failed to update item",
+//                     )
+//                 }
+//             }
+//         }
+//         Ok(None) => {
+//             error!("Item with ID {} not found", item_id);
+//             (
+//                 StatusCode::NOT_FOUND,
+//                 "Item not found",
+//             )
+//         }
+//         Err(err) => {
+//             error!("Failed to fetch item with ID {}: {:?}", item_id, err);
+//             (
+//                 StatusCode::INTERNAL_SERVER_ERROR,
+//                 "Failed to fetch item",
+//             )
+//         }
+//     }
+// }
 
 
 #[instrument(skip(db))]
@@ -125,10 +148,10 @@ pub async fn get_item_by_id(
             info!("Successfully fetched item with ID: {}", id);
             
             let json_response = item_model::ItemModel {
-                id: Some(item.id),
+                id: item.id,
                 product_id: item.product_id,
-                color: item.color.clone().unwrap_or_else(|| "".to_string()),
-                size: item.size.clone().unwrap_or_else(|| "".to_string()),
+                color: item.color,
+                size: item.size,
                 stock: item.stock,
             };
         

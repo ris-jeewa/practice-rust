@@ -1,39 +1,40 @@
-use axum:: Router;
-use repositories::product_repository::ProductRepository;
-use routes::product_routes::product_routes;
-use sea_orm::Database;
-use services::product_service::ProductService;
+use axum::Router;
+use repositories::{item_repository::ItemRepository, product_repository::ProductRepository};
+use routes::{item_routes::item_routes, product_routes::product_routes};
+use sea_orm::{Database, DatabaseConnection};
+use services::{item_service::ItemService, product_service::ProductService};
 
 mod entities;
-mod models;
-mod routes;
 mod handler;
-mod utils;
-mod services;
+mod models;
 mod repositories;
+mod routes;
+mod services;
+mod utils;
 
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
-    server().await;
+    let conn_str = (*utils::constants::DATABASE_URL).clone();
+    let db = Database::connect(conn_str)
+        .await
+        .expect("Failed to connect to db");
+
+    server(db).await;
 }
 
-async fn server() {
+async fn server(db: DatabaseConnection) {
+    // let product_repository = ProductRepository::new(db);
+    let item_repository = ItemRepository::new(db);
 
-    let conn_str = (*utils::constants::DATABASE_URL).clone();
-    let db = Database::connect(conn_str).await.expect("Failed to connect to db");
+    // let product_service = ProductService::new(product_repository);
 
-    // let router = Router::new()
-    // .merge(routes::product_routes::product_routes())
-    // .merge(routes::item_routes::item_routes())
-    // .layer(Extension(db));
-    let product_repository = ProductRepository::new(db);
-    let product_service = ProductService::new(product_repository);
+    let item_service = ItemService::new(item_repository);
 
     let router = Router::new()
-    .merge(product_routes(product_service));
-    
- 
+        // .merge(product_routes(product_service));
+        .merge(item_routes(item_service));
+
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     axum::serve(listener, router).await.unwrap();
 }

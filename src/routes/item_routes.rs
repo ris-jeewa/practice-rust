@@ -1,20 +1,24 @@
-use axum::{http::Method, routing::{get, post,put,delete}, Router};
+use axum::{
+    routing::{get, post, put, delete}, 
+    Router,
+    http::Method
+};
 use tower_http::cors::{Any, CorsLayer};
 
-use crate::handler::item_handler::{create_item, delete_item, get_item_by_id, update_item};
+use crate::{handler::item_handler::create_item, services::item_service::ItemService};
 
 
-pub fn item_routes() -> Router {
+pub fn item_routes(item_service:ItemService) -> Router {
     let cors = CorsLayer::new()
     .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::PUT])
     .allow_origin(Any);
 
-    let router = Router::new()
-    .route("/api/item/:id", get(get_item_by_id))
-    .route("/api/item/create", post(create_item))
-    .route("/api/item/:id/update", put(update_item))
-    .route("/api/item/:id/delete", delete(delete_item))
-    .layer(cors);
-
-    router
+    Router::new()
+    // .route("/item/:id", get(get_item_by_id))
+    .route("/item", post(create_item))
+    // .route("/item/:id", put(update_item))
+    // .route("/item/:id", delete(delete_item))
+    .layer(cors)
+    .with_state(item_service)
+    
 }

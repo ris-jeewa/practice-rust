@@ -8,8 +8,8 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
     pub product_id: i32,
-    pub size: Option<String>,
-    pub color: Option<String>,
+    pub size: String,
+    pub color: String,
     pub stock: i32,
 }
 

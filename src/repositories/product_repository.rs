@@ -20,13 +20,13 @@ use crate::{
 };
 
 #[derive(Clone)]
-pub struct ProductRepository {
-    db: DatabaseConnection,
+pub struct ProductRepository{
+    db:DatabaseConnection,
 }
 
 impl ProductRepository {
     pub fn new(db: DatabaseConnection) -> Self {
-        Self { db }
+        ProductRepository { db }
     }
 
     pub async fn create_product_in_db(
@@ -73,10 +73,10 @@ impl ProductRepository {
                         items: items
                             .into_iter()
                             .map(|item| ItemModel {
-                                id: Some(item.id),
+                                id: item.id,
                                 product_id: item.product_id,
-                                color: item.color.unwrap_or_default(),
-                                size: item.size.unwrap_or_default(),
+                                color: item.color,
+                                size: item.size,
                                 stock: item.stock,
                             })
                             .collect(),

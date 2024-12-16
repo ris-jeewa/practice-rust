@@ -1,10 +1,9 @@
 use serde::{Deserialize, Serialize};
 use chrono::NaiveDateTime;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ItemModel {
-    #[serde(skip_deserializing, default)]
-    pub id: Option<i32>,
+    pub id: i32,
     pub product_id: i32,
     pub color: String,
     pub stock: i32,
@@ -25,4 +24,13 @@ pub struct UpdateItemModel{
     pub stock: Option<i32>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CreateItemModel {
+    #[serde(skip_deserializing, default)]
+    pub id: Option<i32>,
+    pub product_id: i32,
+    pub color: String,
+    pub stock: i32,
+    pub size: String,
+}
 

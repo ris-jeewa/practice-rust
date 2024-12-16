@@ -28,8 +28,6 @@ pub async fn create_product(
             Err((StatusCode::INTERNAL_SERVER_ERROR,Json(serde_json::json!({"error":msg}))))
         }
     }
-
-    
     
 }
 
