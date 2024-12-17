@@ -19,7 +19,7 @@ FROM debian:bookworm-slim
 # Set the working directory in the final image
 WORKDIR /app
 
-ENV DATABASE_URL=postgres://postgres:root@host.docker.internal:5432/products_db
+ENV DATABASE_URL=postgres://postgres:root@34.58.7.104:5432/project2_db
 ENV DATABASE_SCHEMA=public
 ENV RUST_BACKTRACE=1
 
