@@ -1,8 +1,7 @@
-use axum::{extract::{Path, State}, http::{header::CONTENT_TYPE, request, StatusCode}, response::{IntoResponse, Json, Response}, Extension};
-use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait, Set};
-use tracing::{error, info, instrument, warn};
+use axum::{extract::{Path, State}, http:: StatusCode, response::{IntoResponse, Json}};
+use tracing::{error, info};
 
-use crate::{entities::item, models::{item_model::{self, CreateItemModel, ItemModel, UpdateItemModel}, ErrorModel, NotFoundErrorModel}, services::item_service::ItemService};
+use crate::{models::{item_model::{ CreateItemModel,UpdateItemModel}, ErrorModel, NotFoundErrorModel}, services::item_service::ItemService};
 
 pub async fn create_item(
     State(service): State<ItemService>,
