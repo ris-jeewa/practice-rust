@@ -1,11 +1,14 @@
-use axum::Router;
+use axum::{
+    response::{Html, IntoResponse},
+    routing::get,
+    Router,
+};
 use repositories::{item_repository::ItemRepository, product_repository::ProductRepository};
 use routes::{item_routes::item_routes, product_routes::product_routes};
 use sea_orm::DatabaseConnection;
 use services::{item_service::ItemService, product_service::ProductService};
 use utils::db::establish_connection;
-use axum::response::Html;
-use axum::routing::get;
+
 
 mod entities;
 mod handler;
@@ -49,23 +52,22 @@ async fn server(db: DatabaseConnection) {
 // Default route handler function
 async fn default_handler() -> impl axum::response::IntoResponse {
     let response = r#"
-    ** Welcome to the Product-Item Microservice **
-    
-          Available API Endpoints:
-    ----------------------------------
-     **Product Endpoints**: 
-      - GET /product       - Lists all products.
-      - POST /product      - Create a new product.
-      - PUT /product/{id}  - Update a product by ID.
-      - DELETE /product/{id} - Delete a product by ID.
-    
-     **Item Endpoints**:
-      - GET /item/{id}         - Get an item by ID.
-      - POST /item             - Create a new item.
-      - PUT /item/{id}         - Update an item by ID.
-      - DELETE /items/{id}     - Delete an item by ID.
-    
-    Happy coding!"#;
-    
+📋 Welcome to the Product-Item Microservice<br><br>
+Available API Endpoints:<br>
+----------------------------------<br>
+<strong>Product Endpoints</strong>:<br> 
+🔹 GET /product       - Lists all products.<br>
+🔹 POST /product      - Create a new product.<br>
+🔹 PUT /product/{id}  - Update a product by ID.<br>
+🔹 DELETE /product/{id} - Delete a product by ID.<br><br>
+
+<strong>Item Endpoints</strong>:<br>
+🔹 GET /item/{id}         - Get an item by ID.<br>
+🔹 POST /item             - Create a new item.<br>
+🔹 PUT /item/{id}         - Update an item by ID.<br>
+🔹 DELETE /items/{id}     - Delete an item by ID.<br><br>
+
+Happy coding!<br>
+"#;
     Html(response) 
 }
