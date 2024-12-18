@@ -1,7 +1,7 @@
 use axum::Router;
 use repositories::{item_repository::ItemRepository, product_repository::ProductRepository};
 use routes::{item_routes::item_routes, product_routes::product_routes};
-use sea_orm::{DatabaseConnection};
+use sea_orm::DatabaseConnection;
 use services::{item_service::ItemService, product_service::ProductService};
 use utils::db::establish_connection;
 

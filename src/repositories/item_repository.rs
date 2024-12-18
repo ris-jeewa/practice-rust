@@ -1,9 +1,10 @@
 use sea_orm::{ActiveValue::NotSet, DatabaseConnection, EntityTrait};
-
-use crate::{entities::item, models::{item_model::{CreateItemModel, ItemModel, UpdateItemModel}, ErrorModel, NotFoundErrorModel}};
 use sea_orm::{
     ActiveModelTrait,Set,
 };
+
+use crate::{entities::item, models::{item_model::{CreateItemModel, ItemModel, UpdateItemModel}, ErrorModel, NotFoundErrorModel}};
+
 
 #[derive(Clone)]
 pub struct ItemRepository {

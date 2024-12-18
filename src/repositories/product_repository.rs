@@ -1,10 +1,6 @@
-use axum::{
-    http::{request, StatusCode},
-    response::IntoResponse,
-};
 use chrono::{NaiveDateTime, Utc};
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::NotSet, ColumnTrait, DatabaseConnection, EntityTrait,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait,
     ModelTrait, QueryFilter, Set,
 };
 
@@ -179,21 +175,4 @@ impl ProductRepository {
             ))),
         }
     }
-
-    // pub async fn delete_associated_items(
-    //     &self,
-    //     product_id: i32,
-    // ) -> Result<bool, NotFoundErrorModel> {
-    //     match item::Entity::delete_many()
-    //         .filter(item::Column::ProductId.eq(product_id))
-    //         .exec(&txn)
-    //         .await
-    //     {
-    //         Ok(_) => Ok(true),
-    //         Err(err) => Err(NotFoundErrorModel::DatabaseError(format!(
-    //             "Failed to delete associated items: {}",
-    //             err
-    //         ))),
-    //     }
-    // }
 }
