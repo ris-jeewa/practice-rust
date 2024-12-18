@@ -3,7 +3,7 @@ name: Build and Deploy to Google Cloud Run
 env:
   SERVICE_NAME: newproj
   PROJECT_ID: mythical-lens-444706-h7
-  DOCKER_IMAGE_NAME: us-central1-docker.pkg.dev/mythical-lens-444706-h7/rustproj2/rustproj2
+  DOCKER_IMAGE_NAME: us-central1-docker.pkg.dev/mythical-lens-444706-h7/rustproj2/rustproj2:v2
 
 on:
   push:
