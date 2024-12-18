@@ -1,5 +1,3 @@
-use axum::http::request;
-
 use crate::{
     models::{
         product_model::{
