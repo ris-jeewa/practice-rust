@@ -48,24 +48,24 @@ async fn server(db: DatabaseConnection) {
 
 // Default route handler function
 async fn default_handler() -> impl axum::response::IntoResponse {
-    let response = "
-📋 Welcome to the Product-Item Microservice 
-
- Available API Endpoints:
-----------------------------------
- **Product Endpoints**:
-  🔹 GET /product       - Lists all products.
-  🔹 POST /product      - Create a new product.
-  🔹 PUT /product/{id}  - Update a product by ID.
-  🔹 DELETE /product/{id} - Delete a product by ID.
-
-  **Item Endpoints**:
-  🔹 GET /item/{id}         - get an item by ID .
-  🔹 POST /item         - Create a new item.
-  🔹 PUT /item/{id}     - Update an item by ID.
-  🔹 DELETE /items/{id}  - Delete an item by ID.
-
-Happy coding!";
-
+    let response = r#"
+    ** Welcome to the Product-Item Microservice **
+    
+          Available API Endpoints:
+    ----------------------------------
+     **Product Endpoints**: 
+      - GET /product       - Lists all products.
+      - POST /product      - Create a new product.
+      - PUT /product/{id}  - Update a product by ID.
+      - DELETE /product/{id} - Delete a product by ID.
+    
+     **Item Endpoints**:
+      - GET /item/{id}         - Get an item by ID.
+      - POST /item             - Create a new item.
+      - PUT /item/{id}         - Update an item by ID.
+      - DELETE /items/{id}     - Delete an item by ID.
+    
+    Happy coding!"#;
+    
     Html(response) 
 }
